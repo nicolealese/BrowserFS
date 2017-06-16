@@ -41,13 +41,106 @@ constructor(client: any, oauthToken: any) {
    mainCb();
 }
 
-  public stat(path: string, isLstat: boolean, cb: BFSCallback<Stats>): void {
+ public stat(p: string, isLstat: boolean, cb: BFSCallback<Stats>): void {
     // Ignore lstat case -- GoogleDrive doesn't support symlinks
     // Stat the file
 
+//     const title = path.basename(p);
+//     // const stats; 
+//     // const dir = path.dirname(p);
+//     // const base = path.basename(dir);
+
+//     var request = this._client.drive.files.list({
+//         "q": "title = '" + title + "'"
+//     });
+//     request.execute((resp: any) => {
+//       if(typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined'){
+//         var id = resp.items[0].id;
+
+//           var secondRequest = this._client.drive.files.get({
+//     'fileId': id
+//   });
+//   secondRequest.execute(function(resp: any) {
+//     console.log('Title: ' + resp.title);
+//     console.log('Description: ' + resp.description);
+//     console.log('MIME type: ' + resp.mimeType);
+
+//     var type = resp.mimeType; 
+
+//     if (type === 'application/vnd.google-apps.folder') {
+//       const stats = new Stats(FileType.DIRECTORY, 0, 0); 
+//       return cb(null, stats); 
+//     }
+
+//     else {
+//       const stats = new Stats(FileType.FILE, 0, 0); 
+//       return cb(null, stats);
+//     }
+//   });
+// }
+// else {
+//   console.log("not a valid path");
+//   // const stats = new Stats(FileType.FILE, 0, 0); 
+//   // return cb(null, stats);  
+// }
+      
+//       });
+
+//     // my code here
+//     return cb(null, null);
+
+    
 
         const stats = new Stats(FileType.DIRECTORY, 0, 0);
         return cb(null, stats);
+  }
+
+  public _writeFileStrict(p: string, data: ArrayBuffer, cb: BFSCallback<Dropbox.File.Stat>): void {
+    const title = path.basename(p);
+    // const dir = path.dirname(p);
+    // const base = path.basename(dir);
+
+    var request = this._client.drive.files.list({
+        "q": "title = '" + title + "'"
+    });
+    request.execute((resp: any) => {
+        var id = resp.items[0].id;
+        const boundary = '-------314159265358979323846';
+        const delimiter = "\r\n--" + boundary + "\r\n";
+        const close_delim = "\r\n--" + boundary + "--";
+
+        var contentType = "text/html";
+        var metadata = {
+            'mimeType': contentType,
+        };
+
+        var multipartRequestBody =
+            delimiter + 'Content-Type: application/json\r\n\r\n' +
+            JSON.stringify(metadata) +
+            delimiter + 'Content-Type: ' + contentType + '\r\n' + '\r\n' +
+            data +
+            close_delim;
+
+        if (!cb) {
+            cb = function(file) {
+                console.log("Update Complete ", file)
+            };
+        }
+
+        this._client.request({
+            'path': '/upload/drive/v3/files/' + id + "&uploadType=multipart",
+            'method': 'PATCH',
+            'params': {
+                'fileId': id,
+                'uploadType': 'multipart'
+            },
+            'headers': {
+                'Content-Type': 'multipart/mixed; boundary="' + boundary + '"'
+            },
+            'body': multipartRequestBody,
+            callback: cb,
+        });
+    });
   }
 
   /**
