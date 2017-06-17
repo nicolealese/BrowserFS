@@ -23,19 +23,19 @@ export default class Inode {
   }
 
   constructor(public id: string,
-    public dev: number,
-    public ino: number,
-    public size: number,
-    public mode: number,
-    public atime: number,
-    public mtime: number,
-    public ctime: number) { }
+              public dev: number,
+              public ino: number,
+              public size: number,
+              public mode: number,
+              public atime: number,
+              public mtime: number,
+              public ctime: number) { }
 
   /**
    * Handy function that converts the Inode to a Node Stats object.
    */
   public toStats(): Stats {
-    let stats = new Stats(
+    const stats = new Stats(
       (this.mode & 0xF000) === FileType.DIRECTORY ? FileType.DIRECTORY : FileType.FILE,
       this.size, this.mode, new Date(this.atime), new Date(this.mtime), new Date(this.ctime));
     stats.dev = this.dev;

@@ -442,9 +442,9 @@ export class SyncKeyValueFileSystem extends SynchronousFileSystem {
     const tx = this.store.beginTransaction('readwrite');
     if (tx.get(ROOT_NODE_ID) === undefined) {
       // Create new inode.
-      let currTime = (new Date()).getTime();
-      let mode = 0o777 | FileType.DIRECTORY;
-      let dirInode = new Inode(GenerateRandomID(), this.devId, this.allocIno(), 4096, mode,
+      const currTime = (new Date()).getTime();
+      const mode = 0o777 | FileType.DIRECTORY;
+      const dirInode = new Inode(GenerateRandomID(), this.devId, this.allocIno(), 4096, mode,
                                currTime, currTime, currTime);
       // If the root doesn't exist, the first random ID shouldn't exist,
       // either.
@@ -477,7 +477,7 @@ export class SyncKeyValueFileSystem extends SynchronousFileSystem {
         // BASE CASE #1: Return the root's ID.
         return ROOT_NODE_ID;
       } else {
-        let inode = this.getINode(tx, parent, ROOT_NODE_ID);
+        const inode = this.getINode(tx, parent, ROOT_NODE_ID);
         if (!inode) {
           return undefined;
         }
@@ -584,10 +584,10 @@ export class SyncKeyValueFileSystem extends SynchronousFileSystem {
     let fileNode: Inode;
     try {
       // Commit data.
-      let dataId = this.addNewNode(tx, data);
+      const dataId = this.addNewNode(tx, data);
       fileNode = new Inode(dataId, this.devId, this.allocIno(), data.length, mode | type, currTime, currTime, currTime);
       // Commit file node.
-      let fileNodeId = this.addNewNode(tx, fileNode.toBuffer());
+      const fileNodeId = this.addNewNode(tx, fileNode.toBuffer());
       // Update and commit parent directory listing.
       dirListing[fname] = fileNodeId;
       tx.put(parentNode.id, Buffer.from(JSON.stringify(dirListing)), true);
@@ -692,8 +692,8 @@ export interface AsyncKeyValueRWTransaction extends AsyncKeyValueROTransaction {
    * @param cb Triggered with an error and whether or not the value was
    *   committed.
    */
-  put(key: string, data: Buffer, overwrite: boolean, cb: (e: ApiError,
-    committed?: boolean) => void): void;
+  put(key: string, data: Buffer, overwrite: boolean,
+      cb: (e: ApiError, committed?: boolean) => void): void;
   /**
    * Deletes the data at the given key.
    * @param key The key to delete from the store.
@@ -1014,8 +1014,8 @@ export class AsyncKeyValueFileSystem extends BaseFileSystem {
     tx.get(ROOT_NODE_ID, (e: ApiError, data?: Buffer) => {
       if (e || data === undefined) {
         // Create new inode.
-        var currTime = (new Date()).getTime();
-        var dirInode = new Inode(GenerateRandomID(), this.devId, this.allocIno(), 4096, 0o777 | FileType.DIRECTORY, currTime, currTime, currTime);
+        const currTime = (new Date()).getTime();
+        const dirInode = new Inode(GenerateRandomID(), this.devId, this.allocIno(), 4096, 0o777 | FileType.DIRECTORY, currTime, currTime, currTime);
         // If the root doesn't exist, the first random ID shouldn't exist,
         // either.
         tx.put(dirInode.id, getEmptyDirNode(), false, (e?: ApiError) => {
