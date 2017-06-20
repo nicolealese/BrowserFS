@@ -2,6 +2,7 @@ import AsyncMirror from '../backend/AsyncMirror';
 import Dropbox from '../backend/Dropbox';
 import Emscripten from '../backend/Emscripten';
 import FolderAdapter from '../backend/FolderAdapter';
+import GoogleDrive from '../backend/GoogleDrive';
 import HTML5FS from '../backend/HTML5FS';
 import InMemory from '../backend/InMemory';
 import IndexedDB from '../backend/IndexedDB';
@@ -16,6 +17,6 @@ import IsoFS from '../backend/IsoFS';
 /**
  * @hidden
  */
-const Backends = { AsyncMirror, Dropbox, Emscripten, FolderAdapter, HTML5FS, InMemory, IndexedDB, IsoFS, LocalStorage, MountableFileSystem, OverlayFS, WorkerFS, XmlHttpRequest, ZipFS };
+const Backends = { AsyncMirror, Dropbox, Emscripten, FolderAdapter, GoogleDrive, HTML5FS, InMemory, IndexedDB, IsoFS, LocalStorage, MountableFileSystem, OverlayFS, WorkerFS, XmlHttpRequest, ZipFS };
 export default Backends;
 /* tslint:enable:variable-name */
