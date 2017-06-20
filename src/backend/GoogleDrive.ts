@@ -1,5 +1,6 @@
 import {BaseFileSystem, FileSystem, BFSOneArgCallback, BFSCallback} from '../core/file_system';
 import {default as Stats, FileType} from '../core/node_fs_stats';
+import {ApiError} from '../core/api_error';
 import * as path from 'path';
 
 /**
@@ -38,6 +39,14 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
     return false;
   }
 
+  public supportsSymlinks(): boolean {
+    return false;
+  }
+
+  public supportsLinks(): boolean {
+    return false; 
+  }
+
   public empty(mainCb: BFSOneArgCallback): void {
     mainCb();
   }
@@ -46,53 +55,46 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
     // Ignore lstat case -- GoogleDrive doesn't support symlinks
     // Stat the file
 
-    //     const title = path.basename(p);
-    //     // const stats;
-    //     // const dir = path.dirname(p);
-    //     // const base = path.basename(dir);
+        const title = path.basename(p);
 
-    //     const request = this._client.drive.files.list({
-    //         q: "title = '" + title + "'"
-    //     });
-    //     request.execute((resp: any) => {
-    //       if(typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined'){
-    //         const id = resp.items[0].id;
+        const request = this._client.drive.files.list({
+            q: "title = '" + title + "'"
+        });
+        request.execute((resp: any) => {
+          if(typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined'){
+            const id = resp.items[0].id;
 
-    //           const secondRequest = this._client.drive.files.get({
-    //     fileId: id
-    //   });
-    //   secondRequest.execute(function(resp: any) {
-    //     console.log('Title: ' + resp.title);
-    //     console.log('Description: ' + resp.description);
-    //     console.log('MIME type: ' + resp.mimeType);
+              const secondRequest = this._client.drive.files.get({
+        fileId: id
+      });
+      secondRequest.execute(function(resp: any) {
+        console.log('Title: ' + resp.title);
+        console.log('Description: ' + resp.description);
+        console.log('MIME type: ' + resp.mimeType);
 
-    //     const type = resp.mimeType;
+        const type = resp.mimeType;
 
-    //     if (type === 'application/vnd.google-apps.folder') {
-    //       const stats = new Stats(FileType.DIRECTORY, 0, 0);
-    //       return cb(null, stats);
-    //     } else {
-    //       const stats = new Stats(FileType.FILE, 0, 0);
-    //       return cb(null, stats);
-    //     }
-    //   });
-    // } else {
-    //   console.log("not a valid path");
-    //   // const stats = new Stats(FileType.FILE, 0, 0);
-    //   // return cb(null, stats);
-    // }
-    //       });
-    //     // my code here
-    //     return cb(null, null);
-
-    const stats = new Stats(FileType.DIRECTORY, 0, 0);
-    return cb(null, stats);
+        if (type === 'application/vnd.google-apps.folder') {
+          const stats = new Stats(FileType.DIRECTORY, 0, 0);
+          return cb(null, stats);
+        } else {
+          const stats = new Stats(FileType.FILE, 0, 0);
+          return cb(null, stats);
+        }
+      });
+    } else {
+      return cb(ApiError.ENOENT(p)); 
+      // console.log("not a valid path");
+      // const stats = new Stats(FileType.FILE, 0, 0);
+      // return cb(null, stats);
+    }
+          });
+    // const stats = new Stats(FileType.DIRECTORY, 0, 0);
+    // return cb(null, stats);
   }
 
   public _writeFileStrict(p: string, data: ArrayBuffer, cb: BFSCallback<Dropbox.File.Stat>): void {
     const title = path.basename(p);
-    // const dir = path.dirname(p);
-    // const base = path.basename(dir);
 
     const request = this._client.drive.files.list({
       q: "title = '" + title + "'"
@@ -117,7 +119,6 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
 
       if (!cb) {
         cb = function(file) {
-          //                console.log("Update Complete ", file);
         };
       }
 
@@ -194,9 +195,6 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
     request.execute((resp: any) => {
       if (typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined') {
         const id = resp.items[0].id;
-        //        console.log('id in callback = ' + id);
-
-        //        console.log('defined');
         const accessToken = this._oauthToken;
         const secondRequest = this._client.request({
           path: '/drive/v2/files/',
@@ -215,11 +213,9 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
         });
 
         secondRequest.execute(function(resp: any) {
-          //          console.log('nested folder done creating');
         });
 
       } else {
-        //        console.log('undefined');
         const accessToken = this._oauthToken;
         const secondRequest = this._client.request({
           path: '/drive/v2/files/',
@@ -235,7 +231,6 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
         });
 
         secondRequest.execute(function(resp: any) {
-          //          console.log('folder done creating');
         });
 
       }
