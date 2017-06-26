@@ -54,26 +54,36 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
   public stat(p: string, isLstat: boolean, cb: BFSCallback<Stats>): void {
     // Ignore lstat case -- GoogleDrive doesn't support symlinks
     // Stat the file
-
-        const title = path.basename(p);
-
-        const request = this._client.drive.files.list({
-            q: "title = '" + title + "'"
-        });
-        request.execute((resp: any) => {
-          if(typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined'){
-            const id = resp.items[0].id;
-
-              const secondRequest = this._client.drive.files.get({
+    if (p === '/') {
+    // assume the root directory exists
+    const stats = new Stats(FileType.DIRECTORY, 0, 0);
+    return cb(null, stats);
+  }
+  else {
+    const title = path.basename(p);
+    const request = this._client.drive.files.list({
+      q: "title = '" + title + "'"
+    });
+    request.execute((resp: any) => {
+    //   if (typeof resp.items === 'undefined') {
+    //   console.log("resp items is undefined");
+    //   var b = true; 
+    //   if (b) {
+    //     throw new Error ('in the request body')
+    //   }
+    //   return cb(ApiError.ENOENT(p));
+    // }
+    if(typeof resp.items !== 'undefined' && typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined'){
+      console.log("in the stat if block");
+      const id = resp.items[0].id;
+      const secondRequest = this._client.drive.files.get({
         fileId: id
       });
       secondRequest.execute(function(resp: any) {
         console.log('Title: ' + resp.title);
         console.log('Description: ' + resp.description);
         console.log('MIME type: ' + resp.mimeType);
-
         const type = resp.mimeType;
-
         if (type === 'application/vnd.google-apps.folder') {
           const stats = new Stats(FileType.DIRECTORY, 0, 0);
           return cb(null, stats);
@@ -83,15 +93,15 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
         }
       });
     } else {
-      return cb(ApiError.ENOENT(p)); 
-      // console.log("not a valid path");
-      // const stats = new Stats(FileType.FILE, 0, 0);
-      // return cb(null, stats);
+      var b = true; 
+      if (b) {
+        throw new Error ('in the stat else block')
+      } 
+      return cb(ApiError.ENOENT(p));
     }
-          });
-    // const stats = new Stats(FileType.DIRECTORY, 0, 0);
-    // return cb(null, stats);
+  });
   }
+}
 
   public _writeFileStrict(p: string, data: ArrayBuffer, cb: BFSCallback<Dropbox.File.Stat>): void {
     const title = path.basename(p);
@@ -117,7 +127,7 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
         data +
         closeDelim;
 
-      if (!cb) {
+        if (!cb) {
         cb = function(file) {
         };
       }
@@ -142,58 +152,38 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
    * Create a directory
    */
   public mkdir(p: string, mode: number, cb: BFSOneArgCallback): void {
-    // Dropbox.js' client.mkdir() behaves like `mkdir -p`, i.e. it creates a
-    // directory and all its ancestors if they don't exist.
-    // Node's fs.mkdir() behaves like `mkdir`, i.e. it throws an error if an attempt
-    // is made to create a directory without a parent.
-    // To handle this inconsistency, a check for the existence of `path`'s parent
-    // must be performed before it is created, and an error thrown if it does
-    // not exist
-    // const title = path.basename(p);
-    //   const dir = path.dirname(p);
-    //   const base = path.basename(dir);
-
-    //   const request = this._client.drive.files.list({
-    //       'q': 'title = '' + base + '''
-    //   });
-    //   request.execute((resp: any) => {
-    //       const id = resp.items[0].id;
-    //       console.log('id in callback = ' + id)
-
-    //       const accessToken = this._oauthToken;
-    //       const secondRequest = this._client.request({
-    //           'path': '/drive/v2/files/',
-    //           'method': 'POST',
-    //           'headers': {
-    //               'Content-Type': 'application/json',
-    //               'Authorization': 'Bearer ' + accessToken,
-    //           },
-    //           'body': {
-    //               'title': title,
-    //               'parents': [{
-    //                   'id': id
-    //               }],
-    //               'mimeType': 'application/vnd.google-apps.folder',
-    //           }
-    //       });
-
-    //       secondRequest.execute(function(resp: any) {
-    //           console.log('nested folder done creating')
-    //            // cb(null);
-    //       })
-    //   });
-    //   cb(null);
-    // }
 
     const title = path.basename(p);
     const dir = path.dirname(p);
     const base = path.basename(dir);
 
-    const request = this._client.drive.files.list({
-      q: "title = '" + base + "'"
-    });
-    request.execute((resp: any) => {
-      if (typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined') {
+    if (base === '.' || base === '/' || base === '') {
+      const accessToken = this._oauthToken;
+      const secondRequest = this._client.request({
+        path: '/drive/v2/files/',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + accessToken,
+        },
+        body: {
+          title: title,
+          mimeType: 'application/vnd.google-apps.folder',
+        }
+      });
+      secondRequest.execute(function(resp: any) {
+        cb(null);
+      });
+    }
+
+    else {
+      const request = this._client.drive.files.list({
+        q: "title = '" + base + "'"
+      });
+
+      request.execute((resp: any) => {
+      if (typeof resp.items !== 'undefined' && typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined') {
+        console.log("in the mkdir if block"); 
         const id = resp.items[0].id;
         const accessToken = this._oauthToken;
         const secondRequest = this._client.request({
@@ -213,30 +203,17 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
         });
 
         secondRequest.execute(function(resp: any) {
+          cb(null);
         });
 
       } else {
-        const accessToken = this._oauthToken;
-        const secondRequest = this._client.request({
-          path: '/drive/v2/files/',
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + accessToken,
-          },
-          body: {
-            title: title,
-            mimeType: 'application/vnd.google-apps.folder',
-          }
-        });
-
-        secondRequest.execute(function(resp: any) {
-        });
-
+        var b = true;
+        if (b) {
+          throw new Error ('in the mkdir else block')
+        } 
+        return cb(ApiError.ENOENT(dir));
       }
-
     });
-    cb(null);
+    }
   }
-
 }
