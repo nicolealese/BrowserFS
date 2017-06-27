@@ -51,57 +51,70 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
     mainCb();
   }
 
-  public stat(p: string, isLstat: boolean, cb: BFSCallback<Stats>): void {
+  public stat(p: string, isLstat: boolean | null, cb: BFSCallback<Stats>): void {
     // Ignore lstat case -- GoogleDrive doesn't support symlinks
     // Stat the file
     if (p === '/') {
-    // assume the root directory exists
-    const stats = new Stats(FileType.DIRECTORY, 0, 0);
-    return cb(null, stats);
-  }
-  else {
-    const title = path.basename(p);
-    const request = this._client.drive.files.list({
-      q: "title = '" + title + "'"
-    });
-    request.execute((resp: any) => {
-    //   if (typeof resp.items === 'undefined') {
-    //   console.log("resp items is undefined");
-    //   var b = true; 
-    //   if (b) {
-    //     throw new Error ('in the request body')
-    //   }
-    //   return cb(ApiError.ENOENT(p));
-    // }
-    if(typeof resp.items !== 'undefined' && typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined'){
-      console.log("in the stat if block");
-      const id = resp.items[0].id;
-      const secondRequest = this._client.drive.files.get({
-        fileId: id
+      // assume the root directory exists
+      const stats = new Stats(FileType.DIRECTORY, 0, 0);
+      return cb(null, stats);
+    }
+    else {
+      const title = path.basename(p);
+      const request = this._client.drive.files.list({
+        q: "title = '" + title + "'"
       });
-      secondRequest.execute(function(resp: any) {
-        console.log('Title: ' + resp.title);
-        console.log('Description: ' + resp.description);
-        console.log('MIME type: ' + resp.mimeType);
-        const type = resp.mimeType;
-        if (type === 'application/vnd.google-apps.folder') {
-          const stats = new Stats(FileType.DIRECTORY, 0, 0);
-          return cb(null, stats);
+      request.execute((resp: any) => {
+        if (typeof resp.items === 'undefined') {
+          // console.log("resp items is undefined");
+          // var b = true;
+          // if (b) {
+          //   // throw new Error ('in the request body')
+          //   throw new Error ('resp items is undefined and the title is: ' + title);
+          //   // throw new Error ('the first title is: ' + title);
+          //   // throw new Error ('resp.items is: ' + resp.items);
+          // }
+          return cb(ApiError.ENOENT(p));
+        }
+        if(typeof resp.items !== 'undefined' && typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined'){
+          // var b = true;
+          // if (b) {
+          //   throw new Error ('defined and the title is ' + title);
+          // }
+          console.log("in the stat if block");
+          const id = resp.items[0].id;
+          const secondRequest = this._client.drive.files.get({
+            fileId: id
+          });
+          secondRequest.execute(function(resp: any) {
+            if (resp.error !== undefined) {
+              throw new Error('request went wrong: ' + p);
+              // return cb(new ApiError.ENOENT(p));
+            } else {
+              console.log('Title: ' + resp.title);
+              console.log('Description: ' + resp.description);
+              console.log('MIME type: ' + resp.mimeType);
+              const type = resp.mimeType;
+              if (type === 'application/vnd.google-apps.folder') {
+                const stats = new Stats(FileType.DIRECTORY, 0, 0);
+                return cb(null, stats);
+              } else {
+                const stats = new Stats(FileType.FILE, 0, 0);
+                return cb(null, stats);
+              }
+            }
+          });
         } else {
-          const stats = new Stats(FileType.FILE, 0, 0);
-          return cb(null, stats);
+          // var b = true;
+          // if (b) {
+          //   // throw new Error ('in the stat else block')
+          //   throw new Error ('the title is: ' + title);
+          // }
+          return cb(ApiError.ENOENT(p));
         }
       });
-    } else {
-      var b = true; 
-      if (b) {
-        throw new Error ('in the stat else block')
-      } 
-      return cb(ApiError.ENOENT(p));
     }
-  });
   }
-}
 
   public _writeFileStrict(p: string, data: ArrayBuffer, cb: BFSCallback<Dropbox.File.Stat>): void {
     const title = path.basename(p);
@@ -152,7 +165,6 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
    * Create a directory
    */
   public mkdir(p: string, mode: number, cb: BFSOneArgCallback): void {
-
     const title = path.basename(p);
     const dir = path.dirname(p);
     const base = path.basename(dir);
@@ -182,38 +194,38 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
       });
 
       request.execute((resp: any) => {
-      if (typeof resp.items !== 'undefined' && typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined') {
-        console.log("in the mkdir if block"); 
-        const id = resp.items[0].id;
-        const accessToken = this._oauthToken;
-        const secondRequest = this._client.request({
-          path: '/drive/v2/files/',
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + accessToken,
-          },
-          body: {
-            title: title,
-            parents: [{
-              id: id
-            }],
-            mimeType: 'application/vnd.google-apps.folder',
-          }
-        });
+        if (typeof resp.items !== 'undefined' && typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined') {
+          console.log("in the mkdir if block");
+          const id = resp.items[0].id;
+          const accessToken = this._oauthToken;
+          const secondRequest = this._client.request({
+            path: '/drive/v2/files/',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + accessToken,
+            },
+            body: {
+              title: title,
+              parents: [{
+                id: id
+              }],
+              mimeType: 'application/vnd.google-apps.folder',
+            }
+          });
 
-        secondRequest.execute(function(resp: any) {
-          cb(null);
-        });
+          secondRequest.execute(function(resp: any) {
+            cb(null);
+          });
 
-      } else {
-        var b = true;
-        if (b) {
-          throw new Error ('in the mkdir else block')
-        } 
-        return cb(ApiError.ENOENT(dir));
-      }
-    });
+        } else {
+          // var b = true;
+          // if (b) {
+          //   throw new Error ('in the mkdir else block')
+          // }
+          return cb(ApiError.ENOENT(dir));
+        }
+      });
     }
   }
 }
