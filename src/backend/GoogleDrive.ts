@@ -77,20 +77,20 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
           return cb(ApiError.ENOENT(p));
         }
         if(typeof resp.items !== 'undefined' && typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined'){
-          // var b = true;
-          // if (b) {
-          //   throw new Error ('defined and the title is ' + title);
-          // }
+          var b = true;
+          if (b) {
+            throw new Error ('defined and the title is ' + title);
+          }
           console.log("in the stat if block");
           const id = resp.items[0].id;
           const secondRequest = this._client.drive.files.get({
             fileId: id
           });
           secondRequest.execute(function(resp: any) {
-            if (resp.error !== undefined) {
-              throw new Error('request went wrong: ' + p);
-              // return cb(new ApiError.ENOENT(p));
-            } else {
+            // if (resp.error !== undefined) {
+            //   throw new Error('request went wrong: ' + p);
+            //   // return cb(new ApiError.ENOENT(p));
+            // } else {
               console.log('Title: ' + resp.title);
               console.log('Description: ' + resp.description);
               console.log('MIME type: ' + resp.mimeType);
@@ -102,7 +102,7 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
                 const stats = new Stats(FileType.FILE, 0, 0);
                 return cb(null, stats);
               }
-            }
+            // }
           });
         } else {
           // var b = true;
