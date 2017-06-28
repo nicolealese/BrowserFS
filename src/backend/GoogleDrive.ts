@@ -1,3 +1,6 @@
+/// <reference path='/home/sbaxter/DefinitelyTyped/types/gapi/index.d.ts' />
+/// <reference path='/home/sbaxter/DefinitelyTyped/types/gapi.drive/index.d.ts' />
+
 import {BaseFileSystem, FileSystem, BFSOneArgCallback, BFSCallback} from '../core/file_system';
 import {default as Stats, FileType} from '../core/node_fs_stats';
 import {ApiError} from '../core/api_error';
@@ -14,12 +17,10 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
     return true;
   }
 
-  private _client: any;
   private _oauthToken: any;
 
-  constructor(client: any, oauthToken: any) {
+  constructor(oauthToken: any) {
     super();
-    this._client = client;
     this._oauthToken = oauthToken;
   }
 
@@ -44,7 +45,7 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
   }
 
   public supportsLinks(): boolean {
-    return false; 
+    return false;
   }
 
   public empty(mainCb: BFSOneArgCallback): void {
@@ -58,107 +59,32 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
       // assume the root directory exists
       const stats = new Stats(FileType.DIRECTORY, 0, 0);
       return cb(null, stats);
-    }
-    else {
+    } else {
       const title = path.basename(p);
-      const request = this._client.drive.files.list({
-        q: "title = '" + title + "'"
+      const request = gapi.client.drive.files.list({
+        q: "title = '" + title + "'",
       });
       request.execute((resp: any) => {
-        if (typeof resp.items === 'undefined') {
-          // console.log("resp items is undefined");
-          // var b = true;
-          // if (b) {
-          //   // throw new Error ('in the request body')
-          //   throw new Error ('resp items is undefined and the title is: ' + title);
-          //   // throw new Error ('the first title is: ' + title);
-          //   // throw new Error ('resp.items is: ' + resp.items);
-          // }
-          return cb(ApiError.ENOENT(p));
-        }
-        if(typeof resp.items !== 'undefined' && typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined'){
-          var b = true;
-          if (b) {
-            throw new Error ('defined and the title is ' + title);
-          }
-          console.log("in the stat if block");
+        if (typeof resp.items !== 'undefined' && typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined') {
           const id = resp.items[0].id;
-          const secondRequest = this._client.drive.files.get({
+          const secondRequest = gapi.client.drive.files.get({
             fileId: id
           });
           secondRequest.execute(function(resp: any) {
-            // if (resp.error !== undefined) {
-            //   throw new Error('request went wrong: ' + p);
-            //   // return cb(new ApiError.ENOENT(p));
-            // } else {
-              console.log('Title: ' + resp.title);
-              console.log('Description: ' + resp.description);
-              console.log('MIME type: ' + resp.mimeType);
-              const type = resp.mimeType;
-              if (type === 'application/vnd.google-apps.folder') {
-                const stats = new Stats(FileType.DIRECTORY, 0, 0);
-                return cb(null, stats);
-              } else {
-                const stats = new Stats(FileType.FILE, 0, 0);
-                return cb(null, stats);
-              }
-            // }
+            const type = resp.mimeType;
+            if (type === 'application/vnd.google-apps.folder') {
+              const stats = new Stats(FileType.DIRECTORY, 0, 0);
+              return cb(null, stats);
+            } else {
+              const stats = new Stats(FileType.FILE, 0, 0);
+              return cb(null, stats);
+            }
           });
         } else {
-          // var b = true;
-          // if (b) {
-          //   // throw new Error ('in the stat else block')
-          //   throw new Error ('the title is: ' + title);
-          // }
           return cb(ApiError.ENOENT(p));
         }
       });
     }
-  }
-
-  public _writeFileStrict(p: string, data: ArrayBuffer, cb: BFSCallback<Dropbox.File.Stat>): void {
-    const title = path.basename(p);
-
-    const request = this._client.drive.files.list({
-      q: "title = '" + title + "'"
-    });
-    request.execute((resp: any) => {
-      const id = resp.items[0].id;
-      const boundary = '-------314159265358979323846';
-      const delimiter = "\r\n--" + boundary + "\r\n";
-      const closeDelim = "\r\n--" + boundary + "--";
-
-      const contentType = "text/html";
-      const metadata = {
-        mimeType: contentType,
-      };
-
-      const multipartRequestBody =
-        delimiter + 'Content-Type: application/json\r\n\r\n' +
-        JSON.stringify(metadata) +
-        delimiter + 'Content-Type: ' + contentType + '\r\n' + '\r\n' +
-        data +
-        closeDelim;
-
-        if (!cb) {
-        cb = function(file) {
-        };
-      }
-
-      this._client.request({
-        path: '/upload/drive/v3/files/' + id + "&uploadType=multipart",
-        method: 'PATCH',
-        params: {
-          fileId: id,
-          uploadType: 'multipart'
-        },
-        headers: {
-          'Content-Type': 'multipart/mixed; boundary="' + boundary + '"'
-        },
-        body: multipartRequestBody,
-        callback: cb,
-      });
-    });
   }
 
   /**
@@ -171,7 +97,7 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
 
     if (base === '.' || base === '/' || base === '') {
       const accessToken = this._oauthToken;
-      const secondRequest = this._client.request({
+      const secondRequest = gapi.client.request({
         path: '/drive/v2/files/',
         method: 'POST',
         headers: {
@@ -186,19 +112,16 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
       secondRequest.execute(function(resp: any) {
         cb(null);
       });
-    }
-
-    else {
-      const request = this._client.drive.files.list({
+    } else {
+      const request = gapi.client.drive.files.list({
         q: "title = '" + base + "'"
       });
 
       request.execute((resp: any) => {
         if (typeof resp.items !== 'undefined' && typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined') {
-          console.log("in the mkdir if block");
           const id = resp.items[0].id;
           const accessToken = this._oauthToken;
-          const secondRequest = this._client.request({
+          const secondRequest = gapi.client.request({
             path: '/drive/v2/files/',
             method: 'POST',
             headers: {
@@ -217,12 +140,7 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
           secondRequest.execute(function(resp: any) {
             cb(null);
           });
-
         } else {
-          // var b = true;
-          // if (b) {
-          //   throw new Error ('in the mkdir else block')
-          // }
           return cb(ApiError.ENOENT(dir));
         }
       });
