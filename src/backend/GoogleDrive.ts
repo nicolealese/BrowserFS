@@ -1,6 +1,4 @@
-/// <reference path='/home/sbaxter/DefinitelyTyped/types/gapi/index.d.ts' />
-/// <reference path='/home/sbaxter/DefinitelyTyped/types/gapi.drive/index.d.ts' />
-
+/// <reference types='gapi.drive' />
 import {BaseFileSystem, FileSystem, BFSOneArgCallback, BFSCallback} from '../core/file_system';
 import {default as Stats, FileType} from '../core/node_fs_stats';
 import {ApiError} from '../core/api_error';

@@ -21,9 +21,5 @@
   },
   "include": [
     "**/*"
-  ],
-  "files": [
-    "/home/sbaxter/DefinitelyTyped/types/gapi/index.d.ts",
-    "/home/sbaxter/DefinitelyTyped/types/gapi.drive/index.d.ts"
   ]
 }
