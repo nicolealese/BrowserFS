@@ -144,4 +144,175 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
       });
     }
   }
+
+  /**
+   * Get the names of the files in a directory
+   */
+  public readdir(p: string, cb: BFSCallback<string[]>): void {
+    // return cb(null, ['foo', 'bar', 'baz']);
+    const title = path.basename(p);
+
+    let array: any[];
+    array = [];
+
+    const request = gapi.client.drive.files.list({
+      q: "title = '" + title + "'"
+    });
+
+    request.execute(function(resp) {
+      const id = resp.items[0].id;
+      const retrievePageOfChildren = function(request: any, result: any) {
+        request.execute(function(resp: any) {
+          for (let i = 0; i < resp.items.length + 1; i++) {
+            const secondId = resp.items[0].id;
+            const secondRequest = gapi.client.drive.files.get({
+              fileId: secondId
+            });
+            secondRequest.execute(function(resp: any) {
+              array.push(resp.title);
+            });
+          }
+        });
+      };
+      const initialRequest = (<any> (gapi.client.drive)).children.list({
+        folderId : id
+      });
+      retrievePageOfChildren(initialRequest, []);
+    });
+    return cb(null, array);
+  }
+
+  // /**
+  //  * Private
+  //  * Delete a file or directory from Dropbox
+  //  * isFile should reflect which call was made to remove the it (`unlink` or
+  //  * `rmdir`). If this doesn't match what's actually at `path`, an error will be
+  //  * returned
+  //  */
+  // public _remove(p: string, cb: BFSOneArgCallback, isFile: boolean): void {
+  //   (<any> (gapi.client)).stat(p, (error: any, stat: any) => {
+  //     if (error) {
+  //       cb(ApiError.ENOENT(p));
+  //     } else {
+  //       if (stat!.isFile && !isFile) {
+  //         cb(ApiError.FileError(ErrorCode.ENOTDIR, p));
+  //       } else if (!stat!.isFile && isFile) {
+  //         cb(ApiError.FileError(ErrorCode.EISDIR, p));
+  //       } else {
+  //         const title = path.basename(p);
+
+  //         const request = gapi.client.drive.files.list({
+  //           q: "title = '" + title + "'"
+  //         });
+  //         request.execute(function(resp) {
+  //           const id = resp.items[0].id;
+  //           const secondRequest = gapi.client.drive.files.trash({
+  //             fileId: id
+  //           });
+  //           secondRequest.execute(function(resp) {
+  //             cb(null);
+  //           });
+  //         });
+  //       }
+  //     }
+  //   });
+  // }
+
+  // /**
+  //  * Delete a file
+  //  */
+  // public unlink(path: string, cb: BFSOneArgCallback): void {
+  //   this._remove(path, cb, true);
+  // }
+
+  // /**
+  //  * Delete a directory
+  //  */
+  // public rmdir(path: string, cb: BFSOneArgCallback): void {
+  //   this._remove(path, cb, false);
+  // }
+
+  /**
+   * Private
+   * Delete a file or directory from Dropbox
+   * isFile should reflect which call was made to remove the it (`unlink` or
+   * `rmdir`). If this doesn't match what's actually at `path`, an error will be
+   * returned
+   */
+  public _remove(p: string, cb: BFSOneArgCallback): void {
+    const title = path.basename(p);
+
+    const request = gapi.client.drive.files.list({
+        q: "title = '" + title + "'"
+    });
+    request.execute(function(resp) {
+        const id = resp.items[0].id;
+
+        const secondRequest = gapi.client.drive.files.trash({
+            fileId: id
+        });
+        secondRequest.execute(function(resp) {
+          cb(null);
+        });
+    });
+  }
+
+  /**
+   * Delete a directory
+   */
+  public rmdir(p: string, cb: BFSOneArgCallback): void {
+    const title = path.basename(p);
+
+    const request = gapi.client.drive.files.list({
+        q: "title = '" + title + "'"
+    });
+    request.execute((resp) => {
+        if (typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined') {
+            const id = resp.items[0].id;
+            const secondRequest = gapi.client.drive.files.get({
+                fileId: id
+            });
+            secondRequest.execute((resp) => {
+                const type = resp.mimeType;
+                if (type === 'application/vnd.google-apps.folder') {
+                    this._remove(p, cb);
+                } else {
+                  throw new Error ("Error: it is a file !");
+                }
+            });
+        } else {
+          throw new Error ("That path does not exist");
+        }
+    });
+  }
+
+  /**
+   * Delete a file
+   */
+  public unlink(p: string, cb: BFSOneArgCallback): void {
+    const title = path.basename(p);
+
+    const request = gapi.client.drive.files.list({
+        q: "title = '" + title + "'"
+    });
+    request.execute((resp) => {
+        if (typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined') {
+            const id = resp.items[0].id;
+            const secondRequest = gapi.client.drive.files.get({
+                fileId: id
+            });
+            secondRequest.execute((resp) => {
+                const type = resp.mimeType;
+                if (type === 'application/vnd.google-apps.folder') {
+                  throw new Error ("Error: it is a file !");
+                } else {
+                  this._remove(p, cb);
+                }
+            });
+        } else {
+          throw new Error ("That path does not exist");
+        }
+    });
+
+  }
 }
