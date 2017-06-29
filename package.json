@@ -30,6 +30,7 @@
     "@types/async": "2.0.31",
     "@types/dropboxjs": "0.0.29",
     "@types/filesystem": "0.0.28",
+    "@types/gapi.drive": "0.0.1",
     "@types/mocha": "~2.2.34",
     "@types/node": "~7.0",
     "@types/rimraf": "~0.0.28",
@@ -52,6 +53,7 @@
     "mocha": "~3.2",
     "npm-run-all": "~4.0",
     "object-wrapper": "~0.2.0",
+    "pseudomap": "^1.0.2",
     "remap-istanbul": "~0.9",
     "rimraf": "~2.6",
     "rollup": "~0.41",
@@ -63,9 +65,10 @@
     "rollup-watch": "~3.2",
     "source-map-loader": "~0.2",
     "tslint": "~4.5",
-    "typescript": "~2.2",
+    "typescript": "~2.3.4",
     "webpack": "~1.14.0",
-    "webpack-dev-server": "~1.16.2"
+    "webpack-dev-server": "~1.16.2",
+    "yallist": "^3.0.2"
   },
   "scripts": {
     "lint": "tslint -c src/tslint.json --project src/tsconfig.json",

@@ -3,20 +3,19 @@ import {FileSystem} from '../../../src/core/file_system';
 
 export default function GDFSFactory(cb: (name: string, obj: FileSystem[]) => void): void {
   if (GoogleDriveFileSystem.isAvailable()) {
-    var gapi: any;
     var oauthToken: any;
 
    var req = new XMLHttpRequest();
     req.open('GET', '/test/fixtures/gdfs/api.js');
-    req.onerror = (e) => { console.log('foo'); 
+    req.onerror = (e) => { console.log('foo');
     console.error(req.statusText); };
     req.onload = (e) => {
-        console.log('bar'); 
+        console.log('bar');
       if (!(req.readyState === 4 && req.status === 200)) {
         console.error(req.statusText);
       }
-      eval(req.response); 
-      onApiLoad(); 
+      eval(req.response);
+      onApiLoad();
     };
     req.send();
 
@@ -27,11 +26,7 @@ export default function GDFSFactory(cb: (name: string, obj: FileSystem[]) => voi
 var onApiLoad = () => {
 
     // load the APIs
-    gapi.load('client:auth', {
-        'callback': onAuthApiLoad
-    });
-
-
+    gapi.load('client:auth', onAuthApiLoad);
 };
 
 
@@ -57,7 +52,7 @@ var handleAuthResult = (authResult: any) => {
         oauthToken = authResult.access_token;
         gapi.client.load('drive', 'v2', () => {
 
-    var fs = new GoogleDriveFileSystem(gapi.client, oauthToken);
+    var fs = new GoogleDriveFileSystem(oauthToken);
     fs.empty(() => {
       cb('GoogleDrive', [fs]);
   });

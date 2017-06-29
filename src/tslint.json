@@ -17,7 +17,7 @@
       "private-instance-method"
     ] }],
     "no-internal-module": true,
-    "no-reference": true,
+    "no-reference": false,
     "typedef-whitespace": [
       true,
       {
