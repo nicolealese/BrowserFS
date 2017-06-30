@@ -1,5 +1,6 @@
 /// <reference types='gapi.drive' />
 import {BaseFileSystem, FileSystem, BFSOneArgCallback, BFSCallback} from '../core/file_system';
+import {FileFlag} from '../core/file_flag';
 import {default as Stats, FileType} from '../core/node_fs_stats';
 import {ApiError} from '../core/api_error';
 import * as path from 'path';
@@ -149,11 +150,10 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
    * Get the names of the files in a directory
    */
   public readdir(p: string, cb: BFSCallback<string[]>): void {
-    // return cb(null, ['foo', 'bar', 'baz']);
     const title = path.basename(p);
-
-    let array: any[];
-    array = [];
+    let i = 0;
+    let nameArray: any[];
+    nameArray = [];
 
     const request = gapi.client.drive.files.list({
       q: "title = '" + title + "'"
@@ -162,75 +162,27 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
     request.execute(function(resp) {
       const id = resp.items[0].id;
       const retrievePageOfChildren = function(request: any, result: any) {
-        request.execute(function(resp: any) {
-          for (let i = 0; i < resp.items.length + 1; i++) {
-            const secondId = resp.items[0].id;
-            const secondRequest = gapi.client.drive.files.get({
-              fileId: secondId
-            });
-            secondRequest.execute(function(resp: any) {
-              array.push(resp.title);
-            });
-          }
-        });
+        request.execute(newCb);
       };
       const initialRequest = (<any> (gapi.client.drive)).children.list({
         folderId : id
       });
       retrievePageOfChildren(initialRequest, []);
+
+      const newCb = function(resp2: any) {
+        nameArray.push(resp2.title);
+        i++;
+        if (i < resp.items.length) {
+          const secondRequest = gapi.client.drive.files.get({
+            fileId: resp.items[i].id
+          });
+          secondRequest.execute(newCb);
+        } else {
+          return cb(null, nameArray);
+        }
+      };
     });
-    return cb(null, array);
   }
-
-  // /**
-  //  * Private
-  //  * Delete a file or directory from Dropbox
-  //  * isFile should reflect which call was made to remove the it (`unlink` or
-  //  * `rmdir`). If this doesn't match what's actually at `path`, an error will be
-  //  * returned
-  //  */
-  // public _remove(p: string, cb: BFSOneArgCallback, isFile: boolean): void {
-  //   (<any> (gapi.client)).stat(p, (error: any, stat: any) => {
-  //     if (error) {
-  //       cb(ApiError.ENOENT(p));
-  //     } else {
-  //       if (stat!.isFile && !isFile) {
-  //         cb(ApiError.FileError(ErrorCode.ENOTDIR, p));
-  //       } else if (!stat!.isFile && isFile) {
-  //         cb(ApiError.FileError(ErrorCode.EISDIR, p));
-  //       } else {
-  //         const title = path.basename(p);
-
-  //         const request = gapi.client.drive.files.list({
-  //           q: "title = '" + title + "'"
-  //         });
-  //         request.execute(function(resp) {
-  //           const id = resp.items[0].id;
-  //           const secondRequest = gapi.client.drive.files.trash({
-  //             fileId: id
-  //           });
-  //           secondRequest.execute(function(resp) {
-  //             cb(null);
-  //           });
-  //         });
-  //       }
-  //     }
-  //   });
-  // }
-
-  // /**
-  //  * Delete a file
-  //  */
-  // public unlink(path: string, cb: BFSOneArgCallback): void {
-  //   this._remove(path, cb, true);
-  // }
-
-  // /**
-  //  * Delete a directory
-  //  */
-  // public rmdir(path: string, cb: BFSOneArgCallback): void {
-  //   this._remove(path, cb, false);
-  // }
 
   /**
    * Private
@@ -314,5 +266,9 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
         }
     });
 
+  }
+
+  public readFile(fname: string, encoding: string | null, flag: FileFlag, cb: BFSCallback<string | Buffer>): void {
+    throw new Error('in the read file');
   }
 }
