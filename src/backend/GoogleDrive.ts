@@ -160,27 +160,36 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
     });
 
     request.execute(function(resp) {
+      const listCb = function(resp3: any) {
+        const getCb = function(resp2: any) {
+          nameArray.push(resp2.title);
+          i++;
+          if (i < resp3.items.length) {
+              const secondRequest = gapi.client.drive.files.get({
+                fileId: resp3.items[i].id
+              });
+              secondRequest.execute(getCb);
+            } else {
+              return cb(null, nameArray);
+            }
+
+        };
+        const initialGetRequest = gapi.client.drive.files.get({
+          fileId: resp3.items[i].id
+        });
+        initialGetRequest.execute(getCb);
+
+      };
+
       const id = resp.items[0].id;
       const retrievePageOfChildren = function(request: any, result: any) {
-        request.execute(newCb);
+        request.execute(listCb);
       };
+
       const initialRequest = (<any> (gapi.client.drive)).children.list({
         folderId : id
       });
       retrievePageOfChildren(initialRequest, []);
-
-      const newCb = function(resp2: any) {
-        nameArray.push(resp2.title);
-        i++;
-        if (i < resp.items.length) {
-          const secondRequest = gapi.client.drive.files.get({
-            fileId: resp.items[i].id
-          });
-          secondRequest.execute(newCb);
-        } else {
-          return cb(null, nameArray);
-        }
-      };
     });
   }
 
