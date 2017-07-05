@@ -1,5 +1,6 @@
 /// <reference types='gapi.drive' />
 import {BaseFileSystem, FileSystem, BFSOneArgCallback, BFSCallback} from '../core/file_system';
+import {File} from '../core/file';
 import {FileFlag} from '../core/file_flag';
 import {default as Stats, FileType} from '../core/node_fs_stats';
 import {ApiError} from '../core/api_error';
@@ -277,7 +278,64 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
 
   }
 
+  /**
+   * Opens the file at path p with the given flag. The file must exist.
+   * @param p The path to open.
+   * @param flag The flag to use when opening the file.
+   */
+  // public openFile(p: string, flag: FileFlag, cb: BFSCallback<File>): void {
+  //   // throw new ApiError(ErrorCode.ENOTSUP);
+  //   throw new Error('openFile custom error');
+  // }
+
   public readFile(fname: string, encoding: string | null, flag: FileFlag, cb: BFSCallback<string | Buffer>): void {
-    throw new Error('in the read file');
+
+    var request = gapi.client.drive.files.list({
+        "q": "title = '" + fname + "'"
+    });
+    request.execute(function(resp) {
+        var id = resp.items[0].id;
+        // make the request to the google drive server
+        gapi.client.request({
+            path: '/drive/v2/files/' + id,
+            method: 'GET',
+            callback: function(obj) {
+                const xhr = new XMLHttpRequest();
+                xhr.open("GET", obj.downloadUrl);
+                xhr.setRequestHeader("Authorization", "Bearer " + gapi.auth.getToken().access_token);
+                xhr.onload = function() {
+                    console.log(xhr.response);
+                    var data = xhr.response;
+                    document.write(data);
+                }
+                xhr.send();
+            }
+        });
+    });
   }
 }
+
+// export class GoogleDriveFile extends PreloadFile<GoogleDriveFileSystem> implements File {
+//   constructor(_fs: GoogleDriveFileSystem, _path: string, _flag: FileFlag, _stat: Stats, contents?: Buffer) {
+//     super(_fs, _path, _flag, _stat, contents);
+//   }
+
+//   public sync(cb: BFSOneArgCallback): void {
+//     if (this.isDirty()) {
+//       const buffer = this.getBuffer(),
+//         arrayBuffer = buffer2ArrayBuffer(buffer);
+//       this._fs._writeFileStrict(this.getPath(), arrayBuffer, (e?: ApiError) => {
+//         if (!e) {
+//           this.resetDirty();
+//         }
+//         cb(e);
+//       });
+//     } else {
+//       cb();
+//     }
+//   }
+
+//   public close(cb: BFSOneArgCallback): void {
+//     this.sync(cb);
+//   }
+// }
