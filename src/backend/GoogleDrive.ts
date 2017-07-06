@@ -331,7 +331,76 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
     });
   }
 
+  public createFile(p: string, flag: FileFlag, mode: number, cb: BFSCallback<File>): void {
+    const title = path.basename(p);
+    const dir = path.dirname(p);
+    const base = path.basename(dir);
+
+    const request = gapi.client.drive.files.list({
+        q: "title = '" + base + "'"
+    });
+    request.execute((resp) => {
+        const id = resp.items[0].id;
+        const accessToken = this._oauthToken;
+        const secondRequest = gapi.client.request({
+            path: '/drive/v2/files/',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + accessToken,
+            },
+            body: {
+                title: title,
+                parents: [{
+                    id: id
+                }],
+                mimeType: "text/html",
+            }
+        });
+        secondRequest.execute((resp) => {
+          const buffer = arrayBuffer2Buffer(new ArrayBuffer(0));
+          const stats = new Stats(FileType.FILE, buffer.length, 0);
+          const file = new GoogleDriveFile(this, title, flag, stats, buffer);
+          cb(null, file);
+        });
+    });
+  }
+
   public rename(oldPath: string, newPath: string, cb: BFSOneArgCallback): void {
+    const oldTitle = path.basename(oldPath);
+    const newTitle = path.basename(newPath);
+    const newDir = path.dirname(newPath);
+    const newBase = path.basename(newDir);
+
+    const request = gapi.client.drive.files.list({
+        q: "title = '" + oldTitle + "'"
+    });
+    request.execute(function(resp) {
+        const fileId = resp.items[0].id;
+
+        const secondRequest = gapi.client.drive.files.list({
+            q: "title = '" + newBase + "'"
+        });
+        secondRequest.execute(function(resp) {
+            const folderId = resp.items[0].id;
+            const body = {id: folderId};
+            const thirdRequest = (<any> (gapi.client.drive)).parents.insert({
+                fileId: fileId,
+                resource: body
+            });
+            thirdRequest.execute(function(resp: any) {
+                cb(null);
+             });
+            const secondBody = {title: newTitle};
+            const fourthRequest = (<any> (gapi.client.drive.files)).patch({
+                fileId: fileId,
+                resource: secondBody
+            });
+            fourthRequest.execute(function(resp: any) {
+                cb(null);
+            });
+        });
+    });
   }
 
   /**
