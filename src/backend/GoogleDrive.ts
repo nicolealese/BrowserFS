@@ -3,9 +3,24 @@ import {BaseFileSystem, FileSystem, BFSOneArgCallback, BFSCallback} from '../cor
 import {File} from '../core/file';
 import {FileFlag} from '../core/file_flag';
 import {default as Stats, FileType} from '../core/node_fs_stats';
-import {ApiError} from '../core/api_error';
+import {ApiError, ErrorCode} from '../core/api_error';
 import * as path from 'path';
-import {arrayBuffer2Buffer} from '../core/util';
+import {arrayBuffer2Buffer, buffer2ArrayBuffer} from '../core/util';
+
+// const pathMatcher = /(.*)\/(.*)/;
+
+// function dirname(path: string): string {
+//   return path.match(pathMatcher)[1];
+// }
+
+// function basename(path: string): string {
+//   // if (typeof path.match(pathMatcher)[0] !== null) {
+//     return path.match(pathMatcher)![0];
+//   // }
+//   // else {
+//   //   return "";
+//   // }
+// }
 
 /**
  * A read/write file system backed by Google Drive cloud storage.
@@ -18,6 +33,46 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
     return true;
   }
 
+  public static authorize(clientId: string, cb: (fs: GoogleDriveFileSystem) => void): void {
+    if (GoogleDriveFileSystem.isAvailable()) {
+        let oauthToken: any;
+
+        // Use the API Loader script to load google.picker and gapi.auth.
+        const onApiLoad = () => {
+            // load the APIs
+            gapi.load('client:auth', onAuthApiLoad);
+        };
+
+        const onAuthApiLoad = () => {
+            // Scope to use to access user's items.
+            const scope = ['https://www.googleapis.com/auth/drive'];
+
+            ( < any > window).gapi.auth.authorize({
+                    client_id: clientId,
+                    scope: scope,
+                    immediate: false
+                },
+                // log the user in
+                handleAuthResult);
+        };
+
+        const handleAuthResult = (authResult: any) => {
+            if (authResult && !authResult.error) {
+                oauthToken = authResult.access_token;
+                gapi.client.load('drive', 'v2', () => {
+                    const fs  = new GoogleDriveFileSystem(oauthToken);
+                    fs.empty(() => {
+                        cb(fs);
+                    });
+                });
+            }
+        };
+
+        onApiLoad();
+    } else {
+        throw new Error("error");
+    }
+}
   private _oauthToken: any;
   private files: Map<string, GoogleDriveFile>;
 
@@ -150,56 +205,64 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
     }
   }
 
-  // public writeFile(fname: string, data: any, encoding: string | null, flag: FileFlag, mode: number, cb: BFSOneArgCallback): void {
-  //   const dir = path.dirname(p);
-  //   var request = gapi.client.drive.files.list({
-  //       "q": "title = '" + fname + "'"
-  //   });
-  //   request.execute(function(resp) {
-  //       if (typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined') {
-  //           var id = resp.items[0].id;
-  //           const boundary = '-------314159265358979323846';
-  //           const delimiter = "\r\n--" + boundary + "\r\n";
-  //           const close_delim = "\r\n--" + boundary + "--";
+   public _writeFileStrict(p: string, data: ArrayBuffer, cb: BFSOneArgCallback): void {
+    const parent = path.dirname(p);
+    const title = path.basename(p);
+    this.stat(parent, false, (error: ApiError, stat?: Stats): void => {
+      if (error) {
+        cb(ApiError.FileError(ErrorCode.ENOENT, parent));
+      } else {
+        this.writeFile(title, data, null, new FileFlag('w'), 0, cb);
+        cb(null);
+      }
+    });
+  }
 
-  //           var contentType = "text/html";
-  //           var metadata = {
-  //               'mimeType': contentType,
-  //           };
+  public writeFile(fname: string, data: any, encoding: string | null, flag: FileFlag, mode: number, cb: BFSOneArgCallback): void {
+    const request = gapi.client.drive.files.list({
+        q: "title = '" + fname + "'"
+    });
+    request.execute(function(resp) {
+        if (typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined') {
+            const id = resp.items[0].id;
+            const boundary = '-------314159265358979323846';
+            const delimiter = "\r\n--" + boundary + "\r\n";
+            const closeDelim = "\r\n--" + boundary + "--";
 
-  //           var multipartRequestBody =
-  //           delimiter + 'Content-Type: application/json\r\n\r\n' +
-  //           JSON.stringify(metadata) +
-  //           delimiter + 'Content-Type: ' + contentType + '\r\n' + '\r\n' +
-  //           data +
-  //           close_delim;
+            const contentType = "text/html";
+            const metadata = {
+                mimeType: contentType,
+            };
 
-  //               var callback = function(file: any) {
-  //                   cb(null);
-  //               };
+            const multipartRequestBody =
+            delimiter + 'Content-Type: application/json\r\n\r\n' +
+            JSON.stringify(metadata) +
+            delimiter + 'Content-Type: ' + contentType + '\r\n' + '\r\n' +
+            data +
+            closeDelim;
 
-  //           var secondRequest = gapi.client.request({
-  //               'path': '/upload/drive/v3/files/' + id + "&uploadType=multipart",
-  //               'method': 'PATCH',
-  //               'params': {
-  //                   'fileId': id,
-  //                   'uploadType': 'multipart'
-  //               },
-  //               'headers': {
-  //                   'Content-Type': 'multipart/mixed; boundary="' + boundary + '"'
-  //               },
-  //               'body': multipartRequestBody,
-  //               callback: callback,
-  //           });
-  //           secondRequest.execute(function(resp) {
-  //             cb(null);
-  //           })
-  //       }
-  //       else {
-  //         return cb(ApiError.ENOENT(dir));
-  //       }
-  //   });
-  // }
+            const callback = function(file: any) {
+              cb(null);
+            };
+
+            (<any> (gapi.client.request))({
+                path: '/upload/drive/v3/files/' + id + "&uploadType=multipart",
+                method: 'PATCH',
+                params: {
+                    fileId: id,
+                    uploadType: 'multipart'
+                },
+                headers: {
+                    'Content-Type': 'multipart/mixed; boundary="' + boundary + '"'
+                },
+                body: multipartRequestBody,
+                callback: callback,
+            });
+        } else {
+            throw new Error("The file does not exist and cannot be updated");
+        }
+    });
+  }
 
   /**
    * Get the names of the files in a directory
@@ -444,6 +507,7 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
       throw new Error('gdriveFile is undefined');
     }
   }
+
 }
 
 export class GoogleDriveFile extends PreloadFile<GoogleDriveFileSystem> implements File {
@@ -451,8 +515,23 @@ export class GoogleDriveFile extends PreloadFile<GoogleDriveFileSystem> implemen
     super(_fs, _path, _flag, _stat, contents);
   }
 
-  public sync(cb: BFSOneArgCallback): void {
-    cb();
+  // public sync(cb: BFSOneArgCallback): void {
+  //   cb();
+  // }
+
+   public sync(cb: BFSOneArgCallback): void {
+    if (this.isDirty()) {
+      const buffer = this.getBuffer(),
+        arrayBuffer = buffer2ArrayBuffer(buffer);
+      this._fs._writeFileStrict(this.getPath(), arrayBuffer, (e?: ApiError) => {
+        if (!e) {
+          this.resetDirty();
+        }
+        cb(e);
+      });
+    } else {
+      cb();
+    }
   }
 
   public close(cb: BFSOneArgCallback): void {
