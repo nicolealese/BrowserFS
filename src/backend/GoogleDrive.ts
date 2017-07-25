@@ -223,7 +223,7 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
         q: "title = '" + fname + "'"
     });
     request.execute(function(resp) {
-        if (typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined') {
+        if (typeof resp.items !== 'undefined' && typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined') {
             const id = resp.items[0].id;
             const boundary = '-------314159265358979323846';
             const delimiter = "\r\n--" + boundary + "\r\n";
@@ -259,7 +259,7 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
                 callback: callback,
             });
         } else {
-            throw new Error("The file does not exist and cannot be updated");
+            cb(ApiError.ENOENT(fname));
         }
     });
   }
@@ -346,7 +346,7 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
         q: "title = '" + title + "'"
     });
     request.execute((resp) => {
-        if (typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined') {
+        if (typeof resp.items !== 'undefined' && typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined') {
             const id = resp.items[0].id;
             const secondRequest = gapi.client.drive.files.get({
                 fileId: id
@@ -356,11 +356,11 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
                 if (type === 'application/vnd.google-apps.folder') {
                     this._remove(p, cb);
                 } else {
-                  throw new Error ("Error: it is a file !");
+                  cb(ApiError.ENOTDIR(p));
                 }
             });
         } else {
-          throw new Error ("That path does not exist");
+          cb(ApiError.ENOENT(p));
         }
     });
   }
@@ -375,7 +375,7 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
         q: "title = '" + title + "'"
     });
     request.execute((resp) => {
-        if (typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined') {
+        if (typeof resp.items !== 'undefined' && typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined') {
             const id = resp.items[0].id;
             const secondRequest = gapi.client.drive.files.get({
                 fileId: id
@@ -383,13 +383,13 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
             secondRequest.execute((resp) => {
                 const type = resp.mimeType;
                 if (type === 'application/vnd.google-apps.folder') {
-                  throw new Error ("Error: it is a file !");
+                  cb(ApiError.EISDIR(p));
                 } else {
                   this._remove(p, cb);
                 }
             });
         } else {
-          throw new Error ("That path does not exist");
+          cb(ApiError.ENOENT(p));
         }
     });
   }
@@ -403,6 +403,7 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
         q: "title = '" + base + "'"
     });
     request.execute((resp) => {
+        if (typeof resp.items !== 'undefined' && typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined') {
         const id = resp.items[0].id;
         const accessToken = this._oauthToken;
         const secondRequest = gapi.client.request({
@@ -426,6 +427,9 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
           const file = new GoogleDriveFile(this, title, flag, stats, buffer);
           cb(null, file);
         });
+      } else {
+        cb(ApiError.ENOENT(p));
+      }
     });
   }
 
@@ -477,6 +481,7 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
         q: "title = '" + title + "'"
     });
     request.execute((resp) => {
+      if (typeof resp.items !== 'undefined' && typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined') {
         const id = resp.items[0].id;
         // make the request to the google drive server
         gapi.client.request({
@@ -496,15 +501,20 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
                 };
                 xhr.send();
             });
+          } else {
+            // throw new Error("that path does not exist");
+            cb(ApiError.ENOENT(p));
+          }
         });
-  }
+      }
 
   public readFile(fname: string, encoding: string | null, flag: FileFlag, cb: BFSCallback<string | Buffer>): void {
     const gdriveFile = this.files.get(fname);
     if (gdriveFile !== undefined) {
       cb(null, gdriveFile.getBuffer());
     } else {
-      throw new Error('gdriveFile is undefined');
+      // throw new Error('gdriveFile is undefined');
+      cb(ApiError.ENOENT(fname));
     }
   }
 
