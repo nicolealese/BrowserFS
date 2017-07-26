@@ -219,33 +219,42 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
   }
 
   public writeFile(fname: string, data: any, encoding: string | null, flag: FileFlag, mode: number, cb: BFSOneArgCallback): void {
-    const request = gapi.client.drive.files.list({
-        q: "title = '" + fname + "'"
-    });
-    request.execute(function(resp) {
-        if (typeof resp.items !== 'undefined' && typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined') {
-            const id = resp.items[0].id;
-            const boundary = '-------314159265358979323846';
-            const delimiter = "\r\n--" + boundary + "\r\n";
-            const closeDelim = "\r\n--" + boundary + "--";
+    this.stat(fname, null, (err, r) => {
+      // what to do here ? (if err)
+      if (err) {
+        return cb(ApiError.ENOENT(fname));
+      }
+      if (typeof r !== 'undefined') {
+        if (r.isDirectory()) {
+          return cb(ApiError.EISDIR(fname));
+        } else {
+          const request = gapi.client.drive.files.list({
+            q: "title = '" + fname + "'"
+          });
+          request.execute(function(resp) {
+            if (typeof resp.items !== 'undefined' && typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined') {
+              const id = resp.items[0].id;
+              const boundary = '-------314159265358979323846';
+              const delimiter = "\r\n--" + boundary + "\r\n";
+              const closeDelim = "\r\n--" + boundary + "--";
 
-            const contentType = "text/html";
-            const metadata = {
+              const contentType = "text/html";
+              const metadata = {
                 mimeType: contentType,
-            };
+              };
 
-            const multipartRequestBody =
-            delimiter + 'Content-Type: application/json\r\n\r\n' +
-            JSON.stringify(metadata) +
-            delimiter + 'Content-Type: ' + contentType + '\r\n' + '\r\n' +
-            data +
-            closeDelim;
+              const multipartRequestBody =
+              delimiter + 'Content-Type: application/json\r\n\r\n' +
+              JSON.stringify(metadata) +
+              delimiter + 'Content-Type: ' + contentType + '\r\n' + '\r\n' +
+              data +
+              closeDelim;
 
-            const callback = function(file: any) {
-              cb(null);
-            };
+              const callback = function(file: any) {
+                cb(null);
+              };
 
-            (<any> (gapi.client.request))({
+              (<any> (gapi.client.request))({
                 path: '/upload/drive/v3/files/' + id + "&uploadType=multipart",
                 method: 'PATCH',
                 params: {
@@ -257,10 +266,13 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
                 },
                 body: multipartRequestBody,
                 callback: callback,
-            });
-        } else {
-            cb(ApiError.ENOENT(fname));
+              });
+            } else {
+              cb(ApiError.ENOENT(fname));
+            }
+          });
         }
+      }
     });
   }
 
@@ -268,46 +280,58 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
    * Get the names of the files in a directory
    */
   public readdir(p: string, cb: BFSCallback<string[]>): void {
-    const title = path.basename(p);
-    let i = 0;
-    let nameArray: any[];
-    nameArray = [];
+    this.stat(p, null, function(err, r) {
+      // what to do here ? (if err)
+      if (err) {
+        return cb(ApiError.ENOENT(p));
+      }
+      if (typeof r !== 'undefined') {
+         if (r.isFile()) {
+          return cb(ApiError.ENOTDIR(p));
+        } else {
+          const title = path.basename(p);
+          let i = 0;
+          let nameArray: any[];
+          nameArray = [];
 
-    const request = gapi.client.drive.files.list({
-      q: "title = '" + title + "'"
-    });
+          const request = gapi.client.drive.files.list({
+            q: "title = '" + title + "'"
+          });
 
-    request.execute(function(resp) {
-      const listCb = function(resp3: any) {
-        const getCb = function(resp2: any) {
-          nameArray.push(resp2.title);
-          i++;
-          if (i < resp3.items.length) {
-              const secondRequest = gapi.client.drive.files.get({
+          request.execute(function(resp) {
+            const listCb = function(resp3: any) {
+              const getCb = function(resp2: any) {
+                nameArray.push(resp2.title);
+                i++;
+                if (i < resp3.items.length) {
+                    const secondRequest = gapi.client.drive.files.get({
+                      fileId: resp3.items[i].id
+                    });
+                    secondRequest.execute(getCb);
+                  } else {
+                    return cb(null, nameArray);
+                  }
+
+              };
+              const initialGetRequest = gapi.client.drive.files.get({
                 fileId: resp3.items[i].id
               });
-              secondRequest.execute(getCb);
-            } else {
-              return cb(null, nameArray);
-            }
+              initialGetRequest.execute(getCb);
 
-        };
-        const initialGetRequest = gapi.client.drive.files.get({
-          fileId: resp3.items[i].id
-        });
-        initialGetRequest.execute(getCb);
+            };
 
-      };
+            const id = resp.items[0].id;
+            const retrievePageOfChildren = function(request: any, result: any) {
+              request.execute(listCb);
+            };
 
-      const id = resp.items[0].id;
-      const retrievePageOfChildren = function(request: any, result: any) {
-        request.execute(listCb);
-      };
-
-      const initialRequest = (<any> (gapi.client.drive)).children.list({
-        folderId : id
-      });
-      retrievePageOfChildren(initialRequest, []);
+            const initialRequest = (<any> (gapi.client.drive)).children.list({
+              folderId : id
+            });
+            retrievePageOfChildren(initialRequest, []);
+          });
+        }
+      }
     });
   }
 
@@ -476,48 +500,71 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
    * @param flag The flag to use when opening the file.
    */
   public openFile(p: string, flag: FileFlag, cb: BFSCallback<File>): void {
-    const title = path.basename(p);
-    const request = gapi.client.drive.files.list({
-        q: "title = '" + title + "'"
-    });
-    request.execute((resp) => {
-      if (typeof resp.items !== 'undefined' && typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined') {
-        const id = resp.items[0].id;
-        // make the request to the google drive server
-        gapi.client.request({
-            path: '/drive/v2/files/' + id,
-            method: 'GET'
-        }).execute((obj) => {
-                const xhr = new XMLHttpRequest();
-                xhr.open("GET", obj.downloadUrl);
-                xhr.setRequestHeader("Authorization", "Bearer " + gapi.auth.getToken().access_token);
-                xhr.onload = () => {
-                    const data = xhr.response;
-                    const buffer = arrayBuffer2Buffer(data);
-                    const stats = new Stats(FileType.FILE, buffer.length, 0);
-                    const file = new GoogleDriveFile(this, title, flag, stats, buffer);
-                    this.files.set(title, file);
-                    cb(null, file);
-                };
-                xhr.send();
-            });
-          } else {
-            // throw new Error("that path does not exist");
-            cb(ApiError.ENOENT(p));
+    this.stat(p, null, (err, r) => {
+      // what to do here ? (if err)
+      if (err) {
+        return cb(ApiError.ENOENT(p));
+      }
+      if (typeof r !== 'undefined') {
+         if (r.isDirectory()) {
+          return cb(ApiError.EISDIR(p));
+        } else {
+          const title = path.basename(p);
+          const request = gapi.client.drive.files.list({
+              q: "title = '" + title + "'"
+          });
+          request.execute((resp) => {
+            if (typeof resp.items !== 'undefined' && typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined') {
+              const id = resp.items[0].id;
+              // make the request to the google drive server
+              gapi.client.request({
+                  path: '/drive/v2/files/' + id,
+                  method: 'GET'
+              }).execute((obj) => {
+                      const xhr = new XMLHttpRequest();
+                      xhr.open("GET", obj.downloadUrl);
+                      xhr.setRequestHeader("Authorization", "Bearer " + gapi.auth.getToken().access_token);
+                      xhr.onload = () => {
+                          const data = xhr.response;
+                          const buffer = arrayBuffer2Buffer(data);
+                          const stats = new Stats(FileType.FILE, buffer.length, 0);
+                          const file = new GoogleDriveFile(this, title, flag, stats, buffer);
+                          this.files.set(title, file);
+                          cb(null, file);
+                      };
+                      xhr.send();
+                  });
+                } else {
+                  // throw new Error("that path does not exist");
+                  cb(ApiError.ENOENT(p));
+                }
+              });
+            }
           }
         });
       }
 
   public readFile(fname: string, encoding: string | null, flag: FileFlag, cb: BFSCallback<string | Buffer>): void {
-    const gdriveFile = this.files.get(fname);
-    if (gdriveFile !== undefined) {
-      cb(null, gdriveFile.getBuffer());
-    } else {
-      // throw new Error('gdriveFile is undefined');
-      cb(ApiError.ENOENT(fname));
-    }
+    this.stat(fname, null, (err, r) => {
+      // what to do here ? (if err)
+      if (err) {
+        return cb(ApiError.ENOENT(fname));
+      }
+      if (typeof r !== 'undefined') {
+        if (r.isDirectory()) {
+          return cb(ApiError.EISDIR(fname));
+        } else {
+          const gdriveFile = this.files.get(fname);
+          if (gdriveFile !== undefined) {
+            cb(null, gdriveFile.getBuffer());
+          } else {
+            // throw new Error('gdriveFile is undefined');
+            cb(ApiError.ENOENT(fname));
+          }
+        }
+      }
+    });
   }
-
 }
 
 export class GoogleDriveFile extends PreloadFile<GoogleDriveFileSystem> implements File {
