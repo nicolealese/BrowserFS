@@ -286,49 +286,55 @@ export default class GoogleDriveFileSystem extends BaseFileSystem implements Fil
         return cb(ApiError.ENOENT(p));
       }
       if (typeof r !== 'undefined') {
-         if (r.isFile()) {
+        if (r.isFile()) {
           return cb(ApiError.ENOTDIR(p));
         } else {
           const title = path.basename(p);
-          let i = 0;
-          let nameArray: any[];
-          nameArray = [];
 
           const request = gapi.client.drive.files.list({
             q: "title = '" + title + "'"
           });
 
           request.execute(function(resp) {
-            const listCb = function(resp3: any) {
-              const getCb = function(resp2: any) {
-                nameArray.push(resp2.title);
-                i++;
-                if (i < resp3.items.length) {
-                    const secondRequest = gapi.client.drive.files.get({
-                      fileId: resp3.items[i].id
+            if (typeof resp.items[0] !== 'undefined' && typeof resp.items[0].id !== 'undefined') {
+              const folderId = resp.items[0].id;
+              const retrievePageOfChildren = function(request: any, result: any) {
+                request.execute(function(resp: any) {
+                  result = result.concat(resp.items);
+                  const nextPageToken = resp.nextPageToken;
+                  if (nextPageToken) {
+                    request = (<any> (gapi.client.drive)).children.list({
+                      folderId : folderId,
+                      pageToken: nextPageToken
                     });
-                    secondRequest.execute(getCb);
+                    retrievePageOfChildren(request, result);
                   } else {
-                    return cb(null, nameArray);
+                    if (resp.items.length === 0 ) {
+                      return cb(null, []);
+                    }
+                    let nameArray: any;
+                    nameArray = [];
+                    for (let i = 0; i < resp.items.length; i++) {
+                      const nameRequest = gapi.client.drive.files.get({
+                        fileId: result[i].id
+                      });
+                      nameRequest.execute(function(resp2) {
+                        nameArray.push(resp2.title);
+                        if (nameArray.length === resp.items.length) {
+                          cb(null, nameArray);
+                        }
+                      });
+                    }
                   }
-
+                });
               };
-              const initialGetRequest = gapi.client.drive.files.get({
-                fileId: resp3.items[i].id
+              const initialRequest = (<any> (gapi.client.drive)).children.list({
+                folderId : folderId
               });
-              initialGetRequest.execute(getCb);
-
-            };
-
-            const id = resp.items[0].id;
-            const retrievePageOfChildren = function(request: any, result: any) {
-              request.execute(listCb);
-            };
-
-            const initialRequest = (<any> (gapi.client.drive)).children.list({
-              folderId : id
-            });
-            retrievePageOfChildren(initialRequest, []);
+              retrievePageOfChildren(initialRequest, []);
+            } else {
+              cb(ApiError.ENOENT(p));
+            }
           });
         }
       }
